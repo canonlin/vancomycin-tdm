@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vancomycin TDM 監測平台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#eef2f7; --surface:#ffffff; --ink:#13233a; --muted:#51647c; --line:#d3dce8;
+    --primary:#0b5cab; --primary-dark:#084783; --primary-soft:#e6f0fb;
+    --ok:#0a6b45; --ok-bg:#e3f4ea; --ok-line:#7cc6a0;
+    --warn:#7a4300; --warn-bg:#fff0d6; --warn-line:#e8b25c;
+    --bad:#9d1c1c; --bad-bg:#fde7e7; --bad-line:#e49a9a;
+    --peak:#c62828; --trough:#b45f00; --focus:#ff9f1c;
+  }
+  * { box-sizing:border-box; }
+  html { font-size:17px; }
+  body {
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",system-ui,sans-serif;
+    line-height:1.5; font-variant-numeric:tabular-nums;
+  }
+  h1,h2,h3,p { margin:0; }
+  button, input, select { font:inherit; color:inherit; }
+  :focus-visible { outline:3px solid var(--focus); outline-offset:2px; }
+  .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+  [hidden] { display:none !important; }
+
+  /* ---------- Top bar ---------- */
+  .topbar {
+    position:sticky; top:0; z-index:20; display:flex; align-items:center; justify-content:space-between;
+    gap:.75rem; flex-wrap:wrap; padding:.6rem 1rem; background:var(--primary-dark); color:#fff;
+    box-shadow:0 2px 10px rgba(8,71,131,.25);
+  }
+  .brand { display:flex; align-items:center; gap:.7rem; }
+  .hospital-logo { display:block; height:2.9rem; width:auto; flex:none; background:#fff; border-radius:.55rem; padding:.2rem .45rem; }
+  .logo { display:grid; place-items:center; width:2.4rem; height:2.4rem; border-radius:.6rem; background:#fff; color:var(--primary-dark); font-weight:800; }
+  .brand h1 { font-size:1.15rem; font-weight:800; line-height:1.2; }
+  .brand p { font-size:.78rem; opacity:.85; }
+  .top-tools { display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; }
+  .pt-label input {
+    width:15rem; max-width:100%; min-height:2.5rem; padding:.3rem .7rem; border-radius:.5rem;
+    border:1px solid rgba(255,255,255,.5); background:rgba(255,255,255,.12); color:#fff;
+  }
+  .pt-label input::placeholder { color:rgba(255,255,255,.75); }
+  .fsz { display:flex; gap:.2rem; }
+  .fsz button {
+    min-width:2.5rem; min-height:2.5rem; border-radius:.5rem; border:1px solid rgba(255,255,255,.5);
+    background:transparent; color:#fff; font-weight:700; cursor:pointer;
+  }
+  .fsz button[aria-pressed="true"] { background:#fff; color:var(--primary-dark); }
+  .clock { font-size:1.05rem; font-weight:700; min-width:5.2rem; text-align:right; }
+
+  /* ---------- Layout ---------- */
+  .app { display:grid; grid-template-columns:minmax(310px,410px) 1fr; gap:1rem; padding:1rem; max-width:1560px; margin:0 auto; align-items:start; }
+  .panel-left { position:sticky; top:4.6rem; max-height:calc(100vh - 5.4rem); overflow:auto; display:flex; flex-direction:column; gap:.85rem; padding-right:.15rem; }
+  .panel-right { display:flex; flex-direction:column; gap:.85rem; min-width:0; }
+  @media (max-width:980px) {
+    .app { grid-template-columns:1fr; }
+    .panel-left { position:static; max-height:none; overflow:visible; }
+    .pt-label input { width:100%; }
+  }
+
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:1rem; }
+  .card > h2, details > summary h2 { font-size:1.05rem; font-weight:800; display:flex; align-items:center; gap:.55rem; margin-bottom:.8rem; }
+  .card > h2 small, summary h2 small { font-weight:500; font-size:.8rem; color:var(--muted); }
+  .step { display:inline-grid; place-items:center; flex:none; width:1.75rem; height:1.75rem; border-radius:50%; background:var(--primary); color:#fff; font-size:.9rem; font-weight:800; }
+  .step.opt { background:#7d8ea5; }
+
+  /* ---------- Form controls ---------- */
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; }
+  .field { display:flex; flex-direction:column; gap:.25rem; margin-bottom:.75rem; min-width:0; }
+  .field > label, .field > .lbl { font-size:.88rem; font-weight:700; color:var(--ink); }
+  .inp { position:relative; }
+  .inp input, .inp select {
+    width:100%; min-height:3rem; padding:.45rem 3rem .45rem .75rem; font-size:1.1rem; font-weight:600;
+    background:#fff; border:2px solid #9fb2c8; border-radius:.6rem;
+  }
+  .inp select { padding-right:.75rem; }
+  .inp input::placeholder { color:#97a6b9; font-weight:400; }
+  .inp input:focus, .inp select:focus { border-color:var(--primary); }
+  .inp input.filled { border-color:#5aa383; background:#f6fbf8; }
+  .inp input.warn { border-color:var(--warn-line); background:#fffaf0; }
+  .unit { position:absolute; right:.8rem; top:50%; transform:translateY(-50%); color:var(--muted); font-size:.85rem; pointer-events:none; }
+  .hint { font-size:.82rem; color:var(--warn); }
+  .hint:empty { display:none; }
+  .sub { font-size:.82rem; color:var(--muted); }
+
+  .seg { display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:.25rem; padding:.25rem; background:#e3eaf3; border-radius:.7rem; position:relative; }
+  .seg input { position:absolute; opacity:0; pointer-events:none; }
+  .seg label {
+    display:flex; align-items:center; justify-content:center; text-align:center; min-height:2.8rem; padding:.2rem .4rem;
+    border-radius:.5rem; font-weight:700; cursor:pointer; color:var(--muted); font-size:.95rem; line-height:1.2;
+  }
+  .seg input:checked + label { background:#fff; color:var(--primary); box-shadow:0 1px 4px rgba(0,0,0,.18); }
+  .seg input:focus-visible + label { outline:3px solid var(--focus); }
+
+  .renal-note { margin-top:.4rem; padding:.45rem .7rem; border-radius:.5rem; background:#f6f9fd; border:1px dashed var(--line); color:var(--muted); font-size:.85rem; }
+  .renal-note.on { background:var(--primary-soft); border:1px solid #a9c6e6; color:#103b68; font-weight:700; }
+  .check { display:flex; align-items:flex-start; gap:.6rem; padding:.6rem .75rem; border:1px solid var(--line); border-radius:.6rem; cursor:pointer; font-size:.93rem; margin-bottom:.3rem; background:#fafcff; }
+  .check input { width:1.4rem; height:1.4rem; flex:none; margin-top:.1rem; accent-color:var(--primary); }
+
+  details.adv { border:1px dashed var(--line); border-radius:.7rem; padding:.2rem .75rem .4rem; margin-top:.4rem; }
+  details.adv summary, details.card summary { cursor:pointer; font-weight:700; min-height:2.5rem; display:flex; align-items:center; gap:.5rem; list-style:none; }
+  details.adv summary::-webkit-details-marker, details.card summary::-webkit-details-marker { display:none; }
+  details.adv summary::before, details.card summary::before { content:"▸"; color:var(--primary); transition:transform .15s; }
+  details[open] > summary::before { transform:rotate(90deg); }
+  details.card { padding:.4rem 1rem; }
+  details.card summary h2 { margin:0; }
+  details.card[open] { padding-bottom:1rem; }
+  details.card[open] > summary { margin-bottom:.5rem; }
+
+  .actions { position:sticky; bottom:0; display:grid; grid-template-columns:1fr 1fr; gap:.5rem; padding:.7rem 0 .2rem; background:linear-gradient(to top,var(--bg) 75%,transparent); }
+  .btn { min-height:3rem; border-radius:.7rem; border:2px solid var(--primary); background:#fff; color:var(--primary); font-weight:800; cursor:pointer; }
+  .btn:hover { background:var(--primary-soft); }
+  .btn.solid { background:var(--primary); color:#fff; }
+  .btn.solid:hover { background:var(--primary-dark); }
+  .btn.ghost { border-color:#aebccd; color:var(--muted); }
+
+  /* ---------- Hero ---------- */
+  .hero-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(15rem,1fr)); gap:.75rem; }
+  .metric { padding:1rem; border-radius:12px; background:#f6f9fd; border:1px solid var(--line); }
+  .metric .k { font-size:.88rem; font-weight:800; color:var(--primary-dark); }
+  .metric .v { font-size:2.7rem; font-weight:800; line-height:1.1; margin-top:.25rem; }
+  .metric .v .u { font-size:1.05rem; font-weight:600; color:var(--muted); margin-left:.25rem; }
+  .metric .v .fq { font-size:1.6rem; margin-left:.4rem; color:var(--primary-dark); }
+  .metric .s { font-size:.85rem; color:var(--muted); margin-top:.25rem; }
+  .metric .s b { color:var(--ink); }
+  .metric.auc.ok { background:var(--ok-bg); border-color:var(--ok-line); }
+  .metric.auc.low { background:var(--warn-bg); border-color:var(--warn-line); }
+  .metric.auc.high { background:var(--bad-bg); border-color:var(--bad-line); }
+  .pill { display:inline-flex; align-items:center; gap:.35rem; padding:.2rem .7rem; border-radius:99px; font-weight:800; font-size:.92rem; border:1px solid; margin-top:.35rem; }
+  .pill.ok { color:var(--ok); background:#fff; border-color:var(--ok-line); }
+  .pill.low { color:var(--warn); background:#fff; border-color:var(--warn-line); }
+  .pill.high { color:var(--bad); background:#fff; border-color:var(--bad-line); }
+  .pill.na { color:var(--muted); background:#fff; border-color:var(--line); }
+  .gwrap { position:relative; padding-top:.75rem; margin-top:.3rem; }
+  .gbar { display:flex; height:.8rem; border-radius:99px; overflow:hidden; }
+  .gbar i { display:block; height:100%; }
+  .g-low { background:#f0c26e; } .g-ok { background:#6fbf97; } .g-high { background:#e59a9a; }
+  .gmark { position:absolute; top:0; width:0; height:0; border-left:.5rem solid transparent; border-right:.5rem solid transparent; border-top:.7rem solid var(--ink); transform:translateX(-50%); }
+  .gticks { position:relative; height:1.1rem; font-size:.75rem; color:var(--muted); }
+  .gticks span { position:absolute; transform:translateX(-50%); }
+  .hero-foot { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.6rem; margin-top:.8rem; }
+  .hero-foot .sub b { color:var(--ink); }
+  .hero-foot .btn { min-height:2.7rem; padding:0 1rem; }
+
+  .empty { display:flex; flex-direction:column; gap:.6rem; padding:.3rem 0; }
+  .empty h2 { margin:0; font-size:1.15rem; }
+  .checklist { display:grid; grid-template-columns:repeat(auto-fit,minmax(9rem,1fr)); gap:.5rem; margin:.3rem 0; }
+  .checklist div { display:flex; align-items:center; gap:.5rem; padding:.55rem .75rem; border-radius:.6rem; border:2px solid var(--line); font-weight:700; color:var(--muted); }
+  .checklist div.done { border-color:var(--ok-line); background:var(--ok-bg); color:var(--ok); }
+  .checklist div .m { display:inline-grid; place-items:center; width:1.4rem; height:1.4rem; border-radius:50%; border:2px solid currentColor; font-size:.8rem; }
+  .checklist div.done .m { background:var(--ok); color:#fff; border-color:var(--ok); }
+
+  /* ---------- Chart ---------- */
+  .chart-head { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:.6rem; margin-bottom:.6rem; }
+  .chart-head h2 { margin:0 !important; }
+  .chart-head .seg { min-width:16rem; }
+  .legend { display:flex; flex-wrap:wrap; gap:.4rem 1rem; font-size:.82rem; color:var(--muted); margin-bottom:.5rem; }
+  .legend span { display:inline-flex; align-items:center; gap:.35rem; }
+  .legend svg { width:1.05rem; height:1.05rem; flex:none; }
+  .cwrap { position:relative; width:100%; }
+  .cwrap canvas { display:block; width:100%; touch-action:pan-y; }
+  .caption { font-size:.82rem; color:var(--muted); margin-top:.5rem; }
+  .msg { padding:1.2rem; text-align:center; color:var(--muted); background:#f6f9fd; border-radius:10px; border:1px dashed var(--line); }
+
+  /* ---------- Schedule ---------- */
+  .sched-in { display:grid; grid-template-columns:minmax(13rem,20rem) auto; gap:.6rem; align-items:end; margin-bottom:.8rem; }
+  .sched-in .field { margin:0; }
+  .sched-in input[type=datetime-local] { padding-right:.75rem; }
+  .tl { list-style:none; margin:.2rem 0 0 .55rem; padding:0; border-left:3px solid var(--line); }
+  .tl li { position:relative; display:grid; grid-template-columns:6.4rem 1fr; gap:.6rem; align-items:center; padding:.55rem .6rem .55rem 1.2rem; margin-bottom:.15rem; border-radius:.6rem; }
+  .tl li::before { content:""; position:absolute; left:-.62rem; top:50%; width:.85rem; height:.85rem; transform:translateY(-50%); border-radius:50%; background:#fff; border:3px solid #8aa0ba; }
+  .tl .t { font-size:1.5rem; font-weight:800; line-height:1.1; }
+  .tl .t small { display:block; font-size:.72rem; font-weight:600; color:var(--muted); }
+  .tl .w b { font-size:1rem; }
+  .tl .w span.d { display:block; font-size:.82rem; color:var(--muted); }
+  .tl li.peak { background:#fdecec; } .tl li.peak::before { border-color:var(--peak); border-radius:2px; transform:translateY(-50%) rotate(45deg); background:var(--peak); }
+  .tl li.trough { background:#fff1de; } .tl li.trough::before { border-color:var(--trough); border-radius:2px; background:var(--trough); }
+  .tl li.peak .w b { color:var(--peak); } .tl li.trough .w b { color:var(--trough); }
+  .tl li.dim { opacity:.85; }
+  .tag { display:inline-block; font-size:.72rem; padding:0 .4rem; border-radius:.3rem; background:var(--primary-soft); color:var(--primary-dark); font-weight:700; margin-left:.3rem; vertical-align:middle; }
+  .xl { margin-top:.7rem; padding:.6rem .8rem; border-radius:.6rem; background:#f6f9fd; border:1px solid var(--line); font-size:.88rem; }
+
+  /* ---------- Alerts ---------- */
+  .alerts { display:flex; flex-direction:column; gap:.5rem; }
+  .alert { display:flex; gap:.65rem; padding:.7rem .9rem; border-radius:.7rem; border:1px solid; font-size:.95rem; }
+  .alert .ic { flex:none; font-weight:800; }
+  .alert.bad { background:var(--bad-bg); border-color:var(--bad-line); color:var(--bad); }
+  .alert.warn { background:var(--warn-bg); border-color:var(--warn-line); color:var(--warn); }
+  .alert.info { background:var(--primary-soft); border-color:#a9c6e6; color:#103b68; }
+  .alert.ok { background:var(--ok-bg); border-color:var(--ok-line); color:var(--ok); }
+
+  /* ---------- Tables / lists ---------- */
+  table.nomo { width:100%; border-collapse:collapse; font-size:.9rem; }
+  table.nomo th, table.nomo td { border:1px solid var(--line); padding:.5rem .4rem; text-align:center; }
+  table.nomo th { background:var(--primary-soft); color:var(--primary-dark); }
+  table.nomo td.rowh { font-weight:800; background:#f6f9fd; }
+  table.nomo tr.hl td { background:#f1f8ff; }
+  table.nomo tr.hl td.rowh { background:#d8e9fb; }
+  table.nomo td.hit { background:var(--primary); color:#fff; font-weight:800; }
+  .scroll-x { overflow-x:auto; }
+  .kv { display:grid; grid-template-columns:repeat(auto-fit,minmax(16rem,1fr)); gap:0 1.5rem; }
+  .kv div { display:flex; justify-content:space-between; gap:1rem; padding:.45rem 0; border-bottom:1px solid #e6edf5; font-size:.92rem; }
+  .kv div span:first-child { color:var(--muted); }
+  .kv div span:last-child { font-weight:700; text-align:right; }
+  .disclaimer { font-size:.8rem; color:var(--muted); text-align:center; padding:.4rem 1rem 1.5rem; }
+
+  .toast { position:fixed; left:50%; bottom:1.5rem; transform:translateX(-50%) translateY(2rem); opacity:0; background:var(--ink); color:#fff; padding:.7rem 1.2rem; border-radius:.7rem; font-weight:700; transition:.25s; z-index:50; pointer-events:none; }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
+  .beta-banner{background:#fff4d6;color:#7a4b00;border-bottom:2px solid #f0b429;padding:8px 16px;font-size:.9rem;font-weight:600;text-align:center;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="beta-banner">⚠ 測試版・供同儕確認用，請勿輸入真實病人資料；結果僅供參考，不可取代電子藥典與臨床判斷</div>
+
+<header class="topbar">
+  <div class="brand">
+    <img class="hospital-logo" alt="台大醫院雲林分院 NTUH YL" src="data:image/jpeg;base64,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">
+    <div><h1>Vancomycin TDM 監測平台</h1><p>AUC-based · ASHP 2020 · 臺大電子藥典</p></div>
+  </div>
+  <div class="top-tools">
+    <label class="pt-label"><span class="sr">病人標籤</span>
+      <input id="ptLabel" maxlength="14" autocomplete="off" placeholder="病人標籤（床號／末4碼）" title="請勿輸入姓名等可識別資料">
+    </label>
+    <div class="fsz" role="group" aria-label="字級大小">
+      <button type="button" data-fs="15" aria-pressed="false" aria-label="字體小">A</button>
+      <button type="button" data-fs="17" aria-pressed="true" aria-label="字體中" style="font-size:1.1rem">A</button>
+      <button type="button" data-fs="20" aria-pressed="false" aria-label="字體大" style="font-size:1.3rem">A</button>
+    </div>
+    <div class="clock" id="clock" aria-label="目前時間">--:--:--</div>
+  </div>
+</header>
+
+<div class="app">
+
+  <!-- ================= LEFT: INPUT ================= -->
+  <aside class="panel-left" aria-label="輸入區">
+
+    <section class="card">
+      <h2><span class="step">1</span>病人資料 <small>必填 4 項</small></h2>
+      <div class="grid2">
+        <div class="field">
+          <label for="age">年齡</label>
+          <div class="inp"><input id="age" inputmode="numeric" autocomplete="off" enterkeyhint="next" placeholder="例 65"><span class="unit">歲</span></div>
+          <p class="hint" id="h-age"></p>
+        </div>
+        <div class="field">
+          <span class="lbl" id="sexLbl">性別</span>
+          <div class="seg" role="radiogroup" aria-labelledby="sexLbl">
+            <input type="radio" name="sex" id="sex-m" value="male" checked><label for="sex-m">男</label>
+            <input type="radio" name="sex" id="sex-f" value="female"><label for="sex-f">女</label>
+          </div>
+        </div>
+        <div class="field">
+          <label for="tbw">體重 TBW（實際體重）</label>
+          <div class="inp"><input id="tbw" inputmode="decimal" autocomplete="off" enterkeyhint="next" placeholder="例 60"><span class="unit">kg</span></div>
+          <p class="hint" id="h-tbw"></p>
+        </div>
+        <div class="field">
+          <label for="height">身高</label>
+          <div class="inp"><input id="height" inputmode="decimal" autocomplete="off" enterkeyhint="next" placeholder="例 165"><span class="unit">cm</span></div>
+          <p class="hint" id="h-height"></p>
+        </div>
+      </div>
+      <div class="field">
+        <label for="scr">血清肌酐 SCr</label>
+        <div class="inp"><input id="scr" inputmode="decimal" autocomplete="off" enterkeyhint="done" placeholder="例 1.0"><span class="unit">mg/dL</span></div>
+        <p class="hint" id="h-scr"></p>
+      </div>
+      <div class="field">
+        <span class="lbl" id="renalLbl">腎功能狀態</span>
+        <div class="seg" role="radiogroup" aria-labelledby="renalLbl">
+          <input type="radio" name="renal" id="renal-n" value="normal" checked><label for="renal-n">一般</label>
+          <input type="radio" name="renal" id="renal-h" value="hd"><label for="renal-h">血液透析</label>
+          <input type="radio" name="renal" id="renal-c" value="crrt"><label for="renal-c">CRRT</label>
+        </div>
+        <p class="renal-note" id="renalNote">CRRT：每天 24 小時連續不斷、緩慢地進行血液過濾與清除</p>
+      </div>
+      <label class="check"><input type="checkbox" id="critical"><span><b>重症／敗血症</b><br><span class="sub">LD 改用 25 mg/kg（血液透析自動套用）</span></span></label>
+    </section>
+
+    <section class="card">
+      <h2><span class="step">2</span>給藥方案</h2>
+      <div class="field">
+        <span class="lbl" id="modeLbl">以哪個方案評估？</span>
+        <div class="seg" role="radiogroup" aria-labelledby="modeLbl">
+          <input type="radio" name="mode" id="mode-r" value="rec" checked><label for="mode-r">採用電子藥典建議</label>
+          <input type="radio" name="mode" id="mode-c" value="custom"><label for="mode-c">自訂（目前醫囑）</label>
+        </div>
+      </div>
+      <div id="customBox" hidden>
+        <div class="grid2">
+          <div class="field">
+            <label for="cDose">每次劑量</label>
+            <div class="inp"><input id="cDose" inputmode="numeric" autocomplete="off" placeholder="例 1000"><span class="unit">mg</span></div>
+            <p class="hint" id="h-cDose"></p>
+          </div>
+          <div class="field">
+            <label for="cTau">給藥間隔</label>
+            <div class="inp"><select id="cTau"><option value="8">Q8H</option><option value="12" selected>Q12H</option><option value="24">Q24H</option><option value="48">Q48H</option></select></div>
+          </div>
+        </div>
+      </div>
+      <details class="adv">
+        <summary>進階設定（輸注時間、MIC）</summary>
+        <div class="grid2" style="margin-top:.4rem">
+          <div class="field">
+            <label for="tinPref">輸注時間</label>
+            <div class="inp"><select id="tinPref">
+              <option value="auto" selected>自動（500 mg/hr）</option>
+              <option value="1">1 hr</option><option value="1.5">1.5 hr</option><option value="2">2 hr</option>
+              <option value="2.5">2.5 hr</option><option value="3">3 hr</option><option value="4">4 hr</option>
+            </select></div>
+          </div>
+          <div class="field">
+            <label for="mic">MIC</label>
+            <div class="inp"><select id="mic"><option value="0.5">0.5 mg/L</option><option value="1" selected>1 mg/L（預設）</option><option value="2">2 mg/L</option></select></div>
+          </div>
+        </div>
+        <p class="sub">輸注速率 ≤10 mg/min；MIC 未知或 &lt;0.5 時以 1 計算。</p>
+      </details>
+    </section>
+
+    <details class="card" id="tdmBox">
+      <summary><h2><span class="step opt">3</span>已有抽血結果？ <small>選填</small></h2></summary>
+      <div class="grid2">
+        <div class="field">
+          <label for="cPeak">Peak 濃度</label>
+          <div class="inp"><input id="cPeak" inputmode="decimal" autocomplete="off" placeholder="例 28.5"><span class="unit">mg/L</span></div>
+        </div>
+        <div class="field">
+          <label for="cTrough">Trough 濃度</label>
+          <div class="inp"><input id="cTrough" inputmode="decimal" autocomplete="off" placeholder="例 10.2"><span class="unit">mg/L</span></div>
+          <p class="hint" id="h-tdm"></p>
+        </div>
+        <div class="field">
+          <label for="tPeak">Peak：輸注結束後</label>
+          <div class="inp"><input id="tPeak" inputmode="decimal" value="1.5"><span class="unit">hr</span></div>
+        </div>
+        <div class="field">
+          <label for="tTrough">Trough：下次給藥前</label>
+          <div class="inp"><input id="tTrough" inputmode="decimal" value="0.5"><span class="unit">hr</span></div>
+        </div>
+      </div>
+      <p class="sub">需分佈完成後（輸注結束後 1–2 hr）才抽 Peak。輸入兩點後，AUC 改用實測值（兩點法）計算。</p>
+    </details>
+
+    <div class="actions">
+      <button type="button" class="btn ghost" id="btnExample">🧪 填入範例</button>
+      <button type="button" class="btn ghost" id="btnReset">↺ 清除全部</button>
+    </div>
+  </aside>
+
+  <!-- ================= RIGHT: RESULT ================= -->
+  <main class="panel-right" aria-label="結果區">
+
+    <section class="card" id="hero" aria-live="polite">
+      <div class="empty" id="heroEmpty">
+        <h2>請先完成左側「① 病人資料」</h2>
+        <div class="checklist" id="checklist">
+          <div data-k="age"><span class="m"></span>年齡</div>
+          <div data-k="tbw"><span class="m"></span>體重</div>
+          <div data-k="height"><span class="m"></span>身高</div>
+          <div data-k="scr"><span class="m"></span>SCr</div>
+        </div>
+        <p class="sub" id="emptyNote">填滿 4 項後，結果會自動出現，不需要再按計算。灰色數字只是範例，請輸入實際值；也可按左下「填入範例」試用。</p>
+      </div>
+
+      <div id="heroBody" hidden>
+        <div class="hero-grid">
+          <div class="metric">
+            <div class="k">首劑 Loading Dose</div>
+            <div class="v"><span id="ldVal">–</span><span class="u">mg</span></div>
+            <div class="s" id="ldSub"></div>
+            <div class="s" id="ldNote"></div>
+          </div>
+          <div class="metric">
+            <div class="k">維持劑量 Maintenance</div>
+            <div class="v"><span id="mdVal">–</span><span class="u">mg</span><span class="fq" id="mdFq"></span></div>
+            <div class="s" id="mdSub"></div>
+            <div class="s" id="mdRec"></div>
+          </div>
+          <div class="metric auc" id="aucBox">
+            <div class="k">預估 AUC₂₄ / MIC　<span class="sub">目標 400–600</span></div>
+            <div class="v"><span id="aucVal">–</span></div>
+            <span class="pill na" id="aucPill">–</span>
+            <div class="gwrap" id="gwrap">
+              <div class="gmark" id="gmark"></div>
+              <div class="gbar"><i class="g-low" id="gLow"></i><i class="g-ok" id="gOk"></i><i class="g-high" id="gHigh"></i></div>
+              <div class="gticks" id="gticks"></div>
+            </div>
+            <div class="s" id="aucSrc"></div>
+          </div>
+        </div>
+        <div class="hero-foot">
+          <div class="sub" id="heroFoot"></div>
+          <button type="button" class="btn solid" id="btnCopy">📋 複製紀錄文字</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="alerts" id="alerts" aria-live="polite"></div>
+
+    <section class="card" id="chartCard">
+      <div class="chart-head">
+        <h2>濃度–時間預測曲線</h2>
+        <div class="seg" role="radiogroup" aria-label="曲線檢視">
+          <input type="radio" name="view" id="view-ss" value="ss" checked><label for="view-ss">穩態（AUC）</label>
+          <input type="radio" name="view" id="view-st" value="st"><label for="view-st">療程起始（LD→MD）</label>
+        </div>
+      </div>
+      <div class="legend" id="legend">
+        <span><svg viewBox="0 0 16 16"><path d="M8 1 15 8 8 15 1 8Z" fill="#c62828"/></svg>Peak 抽血點</span>
+        <span><svg viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" fill="#b45f00"/></svg>Trough 抽血點</span>
+        <span><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" fill="#13233a" stroke="#fff" stroke-width="2"/></svg>實測值</span>
+        <span><svg viewBox="0 0 16 16"><rect x="1" y="3" width="14" height="10" fill="#0a6b45" opacity=".25"/></svg>AUC 400–600 對應平均濃度</span>
+        <span><svg viewBox="0 0 16 16"><rect x="1" y="3" width="14" height="10" fill="#0b5cab" opacity=".25"/></svg>AUC 陰影</span>
+      </div>
+      <div class="cwrap" id="cwrap">
+        <canvas id="cv" role="img" aria-label="Vancomycin 預測濃度時間曲線"></canvas>
+      </div>
+      <div class="msg" id="chartMsg" hidden></div>
+      <p class="caption" id="chartCap"></p>
+    </section>
+
+    <section class="card" id="schedCard">
+      <h2>抽血排程 <small>輸入給藥時間，自動換算幾點抽 Peak／Trough</small></h2>
+      <div class="sched-in">
+        <div class="field">
+          <label for="doseDT">要抽血的那一劑：開始輸注的日期時間</label>
+          <div class="inp"><input type="datetime-local" id="doseDT"></div>
+        </div>
+        <button type="button" class="btn" id="btnNow" style="min-width:6rem">現在</button>
+      </div>
+      <div id="schedBody"><div class="msg">先完成左側必填資料，這裡會自動換算抽血時間。</div></div>
+    </section>
+
+    <details class="card" id="nomoCard">
+      <summary><h2>電子藥典劑量表（AUC-based nomogram）</h2></summary>
+      <div class="scroll-x" id="nomoBody"></div>
+      <p class="sub" style="margin-top:.5rem">藍色格 = 此病人對應的建議劑量。體重 &gt;100 kg 以最右欄為起點，並依 TDM 調整；MD 上限 4500 mg/day。</p>
+    </details>
+
+    <details class="card" id="pkCard">
+      <summary><h2>藥動學參數與預測值</h2></summary>
+      <div class="kv" id="pkBody"></div>
+    </details>
+
+    <p class="disclaimer">本工具提供預測與試算，僅作臨床決策輔助，不取代藥師與醫師的專業判斷。預測 AUC 為族群公式初估，實際調整請以抽血實測值為準。病人標籤請勿輸入姓名等可識別資料；本頁不會儲存任何輸入內容。</p>
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ================= helpers ================= */
+  const $ = id => document.getElementById(id);
+  const norm = s => s.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[．。，]/g, '.').trim();
+  const num = id => { const s = norm($(id).value); if (s === '') return null; const v = Number(s); return Number.isFinite(v) ? v : null; };
+  const radio = n => document.querySelector('input[name="' + n + '"]:checked').value;
+  const r250 = x => Math.max(250, Math.round(x / 250) * 250);
+  const autoTin = d => Math.max(1, Math.ceil(d / 500 * 2) / 2);
+  const f1 = x => x.toFixed(1);
+  const f0 = x => String(Math.round(x));
+  const TAUL = { 8: 'Q8H', 12: 'Q12H', 24: 'QD', 48: 'QOD' };
+
+  /* ================= 電子藥典 nomogram（與藥典截圖逐格核對） ================= */
+  const COLS = ['≤30 kg', '40 kg', '50 kg', '60 kg', '≥70–100 kg'];
+  const NOMO = [
+    { label: '100–120', min: 100, cells: [[500, 8], [500, 8], [750, 8], [1000, 8], [1000, 8]] },
+    { label: '80–100',  min: 80,  cells: [[500, 12], [750, 12], [1000, 12], [1000, 12], [1250, 12]] },
+    { label: '60–80',   min: 60,  cells: [[500, 12], [500, 12], [750, 12], [1000, 12], [1000, 12]] },
+    { label: '40–60',   min: 40,  cells: [[250, 12], [500, 12], [500, 12], [500, 12], [750, 12]] },
+    { label: '20–40',   min: 20,  cells: [[500, 24], [500, 24], [750, 24], [1000, 24], [1000, 24]] },
+    { label: '10–20',   min: 10,  cells: [[250, 48], [500, 48], [500, 48], [500, 48], [750, 48]] },
+    { label: '0–10',    min: 0,   cells: [[250, 48], [250, 48], [500, 48], [500, 48], [500, 48]] }
+  ];
+  function nomo(clcr, tbw) {
+    let row = NOMO.findIndex(r => clcr >= r.min); if (row < 0) row = NOMO.length - 1;
+    const col = tbw <= 35 ? 0 : tbw <= 45 ? 1 : tbw <= 55 ? 2 : tbw <= 65 ? 3 : 4;
+    const c = NOMO[row].cells[col];
+    return { dose: c[0], tau: c[1], row: row, col: col };
+  }
+
+  /* ================= state ================= */
+  let last = null;
+  let hoverX = null;
+  let sched = null;
+
+  /* ================= core computation ================= */
+  function compute() {
+    const age = num('age'), tbw = num('tbw'), height = num('height'), scr = num('scr');
+    const miss = [];
+    if (!(age > 0)) miss.push('age'); if (!(tbw > 0)) miss.push('tbw');
+    if (!(height > 0)) miss.push('height'); if (!(scr > 0)) miss.push('scr');
+    if (miss.length) return { ok: false, miss: miss };
+    if (age < 18) return { ok: false, miss: [], peds: true };
+
+    const sex = radio('sex'), renal = radio('renal'), mode = radio('mode');
+    const critical = $('critical').checked;
+    const mic = Number($('mic').value) || 1, tinPref = $('tinPref').value;
+    const bmi = tbw / Math.pow(height / 100, 2), obese = bmi >= 30;
+
+    // CLcr：Cockcroft-Gault，使用實際體重（電子藥典：obese 用 actual body weight）
+    const clcr = Math.max(((140 - age) * tbw / (72 * scr)) * (sex === 'female' ? 0.85 : 1), 1);
+
+    // ---- Loading dose ----
+    const crit = critical || renal === 'hd';
+    let ldLo, ldHi, ldBasis;
+    if (crit) { ldLo = ldHi = 25; ldBasis = renal === 'hd' ? '25 mg/kg（ESRD／透析）' : '25 mg/kg（重症）'; }
+    else if (renal === 'crrt') { ldLo = 20; ldHi = 25; ldBasis = '20–25 mg/kg（CRRT）'; }
+    else if (obese) { ldLo = 20; ldHi = 25; ldBasis = '20–25 mg/kg（肥胖，用實際體重）'; }
+    else { ldLo = 20; ldHi = 25; ldBasis = '20–25 mg/kg（成人）'; }
+    const ld = Math.min(r250((ldLo + ldHi) / 2 * tbw), 3000);
+    const ldRange = [Math.min(ldLo * tbw, 3000), Math.min(ldHi * tbw, 3000)];
+    const ldCapped = ldHi * tbw > 3000;
+
+    // ---- Recommended maintenance ----
+    let rec;
+    if (renal === 'hd') rec = { dose: r250(8.75 * tbw), tau: null, label: '透析後給藥' };
+    else if (renal === 'crrt') rec = { dose: r250(8.75 * tbw), tau: 12, label: 'Q12H' };
+    else { const n = nomo(clcr, tbw); rec = { dose: n.dose, tau: n.tau, label: TAUL[n.tau], row: n.row, col: n.col }; }
+
+    // ---- Regimen used for evaluation ----
+    let dose = rec.dose, tau = rec.tau, custom = false, customMissing = false;
+    if (mode === 'custom' && renal !== 'hd') {
+      const cd = num('cDose');
+      if (cd > 0) { dose = cd; tau = Number($('cTau').value); custom = true; } else customMissing = true;
+    }
+    const tin = tinPref === 'auto' ? autoTin(dose) : Number(tinPref);
+    const ldTin = tinPref === 'auto' ? autoTin(ld) : Number(tinPref);
+
+    // ---- Population PK（專案資料：CL_vanco = 0.79×CLcr + 15.7 mL/min；Vd 0.7 L/kg） ----
+    const vdPop = 0.7 * tbw;
+    let pop = null;
+    if (renal === 'normal') { const cl = (0.79 * clcr + 15.7) * 0.06; pop = { cl: cl, ke: cl / vdPop, vd: vdPop }; }
+
+    // ---- Measured two-point（Sawchuk-Zaske：梯形＋對數梯形） ----
+    const cP = num('cPeak'), cT = num('cTrough');
+    const tP = num('tPeak') == null ? 1.5 : num('tPeak');
+    const tTr = num('tTrough') == null ? 0.5 : num('tTrough');
+    let meas = null, measErr = null;
+    if (cP > 0 && cT > 0) {
+      if (renal === 'hd') measErr = '透析病人請以透析前濃度（目標 15–20 mg/L）判讀，不適用兩點 AUC。';
+      else if (!tau) measErr = '缺少給藥間隔。';
+      else if (cP <= cT) measErr = 'Peak 必須高於 Trough。';
+      else {
+        const dt = (tau - tTr) - (tin + tP);
+        if (dt <= 0) measErr = 'Peak 與 Trough 抽血時間重疊或順序不合理，請檢查時間。';
+        else {
+          const k = Math.log(cP / cT) / dt;
+          const ceoi = cP * Math.exp(k * tP), ct = cT * Math.exp(k * tTr);
+          const aucTau = tin * (ceoi + ct) / 2 + (ceoi - ct) / k;
+          if (ceoi > ct && aucTau > 0) {
+            const auc24 = aucTau * 24 / tau, cl = dose * 24 / tau / auc24;
+            meas = { ke: k, cl: cl, vd: cl / k, ceoi: ceoi, ct: ct, aucTau: aucTau, auc24: auc24 };
+          } else measErr = '實測值無法換算，請確認濃度與時間。';
+        }
+      }
+    }
+
+    const eff = meas ? { ke: meas.ke, cl: meas.cl, vd: meas.vd, src: 'meas' } : (pop && tau ? { ke: pop.ke, cl: pop.cl, vd: pop.vd, src: 'pop' } : null);
+    let auc24 = null, aucMIC = null, preds = null, adj = null;
+    if (eff && tau) {
+      auc24 = meas ? meas.auc24 : dose * 24 / tau / eff.cl;
+      aucMIC = auc24 / mic;
+      const ceoiSS = dose / tin / eff.cl * (1 - Math.exp(-eff.ke * tin)) / (1 - Math.exp(-eff.ke * tau));
+      preds = {
+        ceoi: ceoiSS,
+        peak: ceoiSS * Math.exp(-eff.ke * tP),
+        trough: ceoiSS * Math.exp(-eff.ke * (tau - tin - tTr)),
+        troughTrue: ceoiSS * Math.exp(-eff.ke * (tau - tin))
+      };
+      if (meas) {
+        const dNew = r250(500 * mic * eff.cl * tau / 24);
+        adj = { dose: dNew, auc: dNew * 24 / tau / eff.cl / mic };
+      }
+    }
+
+    return {
+      ok: true, age: age, sex: sex, tbw: tbw, height: height, scr: scr, renal: renal, critical: critical,
+      mic: mic, bmi: bmi, obese: obese, clcr: clcr,
+      ld: ld, ldRange: ldRange, ldBasis: ldBasis, ldCapped: ldCapped, ldTin: ldTin,
+      rec: rec, dose: dose, tau: tau, tin: tin, custom: custom, customMissing: customMissing,
+      pop: pop, meas: meas, measErr: measErr, eff: eff, auc24: auc24, aucMIC: aucMIC, preds: preds, adj: adj,
+      tP: tP, tTr: tTr, cP: cP, cT: cT
+    };
+  }
+
+  /* ================= input hints ================= */
+  function setHint(id, inputId, msg) {
+    $(id).textContent = msg || '';
+    $(inputId).classList.toggle('warn', !!msg);
+  }
+  function updateFieldState() {
+    const age = num('age'), tbw = num('tbw'), h = num('height'), scr = num('scr');
+    ['age', 'tbw', 'height', 'scr', 'cDose', 'cPeak', 'cTrough'].forEach(id => $(id).classList.toggle('filled', num(id) > 0));
+    setHint('h-age', 'age', age != null && age < 18 ? '本工具適用成人（≥18 歲）；兒童請依院內兒童 protocol。' : age != null && age > 110 ? '請確認年齡' : '');
+    setHint('h-tbw', 'tbw', tbw != null && (tbw < 30 || tbw > 250) ? '數值少見，請確認單位為 kg' : '');
+    setHint('h-height', 'height', h != null && (h < 120 || h > 220) ? '數值少見，請確認單位為 cm' : '');
+    setHint('h-scr', 'scr', scr != null && (scr < 0.2 || scr > 15) ? '數值少見，請確認單位為 mg/dL' : scr != null && scr < 0.6 ? 'SCr 偏低，CG 公式可能高估 CLcr，請依臨床判斷' : '');
+    const cd = num('cDose');
+    setHint('h-cDose', 'cDose', radio('mode') === 'custom' && !(cd > 0) ? '請輸入劑量；目前先以建議劑量顯示' : '');
+    const cP = num('cPeak'), cT = num('cTrough');
+    $('h-tdm').textContent = cP > 0 && cT > 0 && cP <= cT ? 'Peak 必須高於 Trough' : '';
+    document.querySelectorAll('#checklist div').forEach(d => {
+      const ok = num(d.dataset.k) > 0;
+      d.classList.toggle('done', ok); d.querySelector('.m').textContent = ok ? '✓' : '';
+    });
+  }
+
+  /* ================= render: hero ================= */
+  function renderHero(r) {
+    const ok = r.ok;
+    $('heroEmpty').hidden = ok; $('heroBody').hidden = !ok;
+    if (!ok) {
+      $('emptyNote').textContent = r.peds
+        ? '本工具僅適用成人（≥18 歲）。兒童請依院內兒童 protocol（例：≥40 kg 10 mg/kg q6h；>3 月且 <40 kg 15 mg/kg q6h）。'
+        : '填滿 4 項後，結果會自動出現，不需要再按計算。灰色數字只是範例，請輸入實際值；也可按左下「填入範例」試用。';
+      return;
+    }
+    $('ldVal').textContent = f0(r.ld);
+    $('ldSub').innerHTML = '範圍 <b>' + f0(r.ldRange[0]) + (r.ldRange[0] === r.ldRange[1] ? '' : '–' + f0(r.ldRange[1])) + ' mg</b>　' + r.ldBasis + (r.ldCapped ? '　<b>已達上限 3000 mg</b>' : '');
+    $('ldNote').textContent = '上限 3000 mg；MD 於 LD 後「下一個給藥間隔」開始。';
+
+    $('mdVal').textContent = f0(r.dose);
+    $('mdFq').textContent = r.renal === 'hd' ? '透析後' : TAUL[r.tau];
+    const daily = r.tau ? r.dose * 24 / r.tau : null;
+    $('mdSub').innerHTML = r.renal === 'hd' ? '7.5–10 mg/kg，每次透析後給藥（每週 3 次）'
+      : '輸注 <b>' + r.tin + ' hr</b>' + (daily ? '　每日 <b>' + f0(daily) + ' mg</b>' : '');
+    if (r.custom) $('mdRec').innerHTML = '電子藥典建議：<b>' + r.rec.dose + ' mg ' + r.rec.label + '</b>';
+    else if (r.customMissing) $('mdRec').textContent = '（自訂劑量未填，先顯示建議劑量）';
+    else $('mdRec').textContent = r.renal === 'normal' ? '依 CLcr ' + f0(r.clcr) + ' mL/min、體重 ' + r.tbw + ' kg 查表' : '';
+
+    const box = $('aucBox'), pill = $('aucPill');
+    box.classList.remove('ok', 'low', 'high'); pill.className = 'pill na';
+    if (r.aucMIC != null) {
+      const a = r.aucMIC;
+      $('aucVal').textContent = f0(a);
+      const st = a >= 400 && a <= 600 ? 'ok' : a < 400 ? 'low' : 'high';
+      box.classList.add(st); pill.className = 'pill ' + st;
+      pill.textContent = st === 'ok' ? '✓ 達標' : st === 'low' ? '▼ 偏低（療效不足風險）' : '▲ 偏高（腎毒性風險）';
+      $('aucSrc').textContent = r.meas ? '依實測 Peak／Trough 兩點法計算' : '族群公式初估（尚無抽血值）';
+      $('gwrap').hidden = false;
+      const max = Math.max(800, Math.ceil(a * 1.1 / 100) * 100);
+      $('gLow').style.width = (400 / max * 100) + '%'; $('gOk').style.width = (200 / max * 100) + '%'; $('gHigh').style.width = ((max - 600) / max * 100) + '%';
+      $('gmark').style.left = Math.min(a / max, 1) * 100 + '%';
+      $('gticks').innerHTML = [0, 400, 600, max].map(v => '<span style="left:' + (v / max * 100) + '%">' + v + '</span>').join('');
+    } else {
+      $('aucVal').textContent = '—';
+      pill.textContent = r.renal === 'hd' ? '透析前濃度 15–20 mg/L' : 'CRRT：請以實測濃度判讀';
+      $('aucSrc').textContent = r.renal === 'hd' ? '透析病人不使用 AUC 預測' : '輸入左側 ③ 抽血結果後可計算 AUC';
+      $('gwrap').hidden = true;
+    }
+    $('heroFoot').innerHTML = 'CLcr（Cockcroft-Gault）<b>' + (r.renal === 'hd' ? '透析' : f0(r.clcr) + ' mL/min') + '</b>　BMI <b>' + f1(r.bmi) + '</b>' + (r.obese ? '（肥胖）' : '');
+  }
+
+  /* ================= render: alerts ================= */
+  function renderAlerts(r) {
+    const A = [];
+    const add = (lv, t) => A.push({ lv: lv, t: t });
+    if (r.ok) {
+      if (r.measErr) add('warn', '兩點 AUC 無法計算：' + r.measErr);
+      if (r.aucMIC != null) {
+        const a = r.aucMIC;
+        if (a > 600) add('bad', 'AUC₂₄/MIC ' + f0(a) + ' > 600：腎毒性風險增加，考慮減量或延長間隔，並監測腎功能。');
+        else if (a < 400 && a >= 380) add('info', 'AUC₂₄/MIC ' + f0(a) + ' 接近下限；若病人狀況穩定，不一定需要增量（本院教材：380–400 可觀察）。');
+        else if (a < 400) add('warn', 'AUC₂₄/MIC ' + f0(a) + ' < 400：療效可能不足，考慮增加劑量或縮短間隔。');
+        if (r.preds && r.preds.trough < 10) add('warn', '預測 Trough ' + f1(r.preds.trough) + ' mg/L < 10：即使 AUC 達標，仍建議維持 Trough ≥ 10 mg/L。');
+        if (r.meas && r.adj) {
+          if (a >= 400 && a <= 600) add('ok', '目前 AUC 已達標，可維持現行劑量。');
+          else add('info', '若要調整至 AUC≈500：約 ' + r.adj.dose + ' mg ' + TAUL[r.tau] + '（預估 AUC ' + f0(r.adj.auc) + '）。此為試算，請搭配臨床判斷。');
+        }
+      }
+      if (r.tau && r.dose * 24 / r.tau > 4500) add('warn', '每日總量 ' + f0(r.dose * 24 / r.tau) + ' mg 超過上限 4500 mg/day。');
+      if (r.renal === 'normal' && r.clcr < 30) add('bad', 'CLcr ' + f0(r.clcr) + ' mL/min < 30：重度腎功能不全，需延長間隔並密切監測濃度與腎功能。');
+      if (r.renal === 'hd') add('info', '血液透析：LD 25 mg/kg；MD 7.5–10 mg/kg 於透析後給；以透析前濃度 15–20 mg/L 監測，只需 1 點血。');
+      if (r.renal === 'crrt') add('info', 'CRRT（effluent 20–25 mL/kg/hr）：MD 7.5–10 mg/kg Q12H，請以實測濃度調整。');
+      if (r.obese) add('info', '肥胖（BMI ' + f1(r.bmi) + '）：LD、MD 與 CG 均使用實際體重（TBW）；LD 上限 3000 mg，MD 上限 4500 mg/day。');
+      if (r.renal === 'normal') add('info', 'CLcr 為估算值；腎功能快速變動（如 AKI）時，請以抽血實測為準。');
+    }
+    const order = { bad: 0, warn: 1, ok: 2, info: 3 };
+    A.sort((x, y) => order[x.lv] - order[y.lv]);
+    const ic = { bad: '⛔', warn: '⚠', ok: '✓', info: 'ℹ' };
+    const main = A.filter(a => a.lv !== 'info'), info = A.filter(a => a.lv === 'info');
+    let h = main.map(a => '<div class="alert ' + a.lv + '"><span class="ic">' + ic[a.lv] + '</span><span>' + a.t + '</span></div>').join('');
+    if (info.length) h += '<details class="card" style="padding:.2rem .9rem"><summary style="min-height:2.4rem"><b>其他提示（' + info.length + '）</b></summary><div class="alerts" style="margin:.3rem 0 .6rem">' +
+      info.map(a => '<div class="alert info"><span class="ic">ℹ</span><span>' + a.t + '</span></div>').join('') + '</div></details>';
+    $('alerts').innerHTML = h;
+  }
+
+  /* ================= chart ================= */
+  function concAt(t, doses, eff) {
+    let c = 0;
+    for (const d of doses) {
+      const e = t - d.s; if (e < 0) continue;
+      const R = d.D / d.tin / eff.cl;
+      c += e <= d.tin ? R * (1 - Math.exp(-eff.ke * e)) : R * (1 - Math.exp(-eff.ke * d.tin)) * Math.exp(-eff.ke * (e - d.tin));
+    }
+    return c;
+  }
+  function buildSeries(r, view) {
+    const eff = r.eff, tau = r.tau, tin = r.tin;
+    const out = { pts: [], span: 0, markers: null, shade: null, tdm: [], doseX: [] };
+    let doses;
+    const n = 480;
+    if (view === 'ss') {
+      out.span = 3 * tau;
+      const N = Math.min(120, Math.max(10, Math.ceil(7 * Math.LN2 / eff.ke / tau)));
+      doses = []; for (let i = 0; i < N + 3; i++) doses.push({ s: i * tau, D: r.dose, tin: tin });
+      const off = N * tau;
+      for (let i = 0; i <= n; i++) { const x = out.span * i / n; out.pts.push({ x: x, y: concAt(off + x, doses, eff) }); }
+      const s0 = 2 * tau;
+      out.markers = {
+        peak: { x: s0 + tin + r.tP, y: concAt(off + s0 + tin + r.tP, doses, eff) },
+        trough: { x: s0 + tau - r.tTr, y: concAt(off + s0 + tau - r.tTr, doses, eff) }
+      };
+      const win = 24 % tau === 0 ? 24 : tau;
+      out.shade = { x0: out.span - win, x1: out.span, win: win };
+      for (let i = 0; i < 3; i++) out.doseX.push(i * tau);
+      if (r.cP > 0) out.tdm.push({ x: out.markers.peak.x, y: r.cP, l: '實測 ' + r.cP });
+      if (r.cT > 0) out.tdm.push({ x: out.markers.trough.x, y: r.cT, l: '實測 ' + r.cT });
+    } else {
+      out.span = Math.max(48, 4 * tau);
+      doses = [{ s: 0, D: r.ld, tin: r.ldTin }];
+      for (let i = 1; i * tau < out.span + tau; i++) doses.push({ s: i * tau, D: r.dose, tin: tin });
+      for (let i = 0; i <= n; i++) { const x = out.span * i / n; out.pts.push({ x: x, y: concAt(x, doses, eff) }); }
+      const s0 = tau;
+      out.markers = {
+        peak: { x: s0 + tin + r.tP, y: concAt(s0 + tin + r.tP, doses, eff) },
+        trough: { x: s0 + tau - r.tTr, y: concAt(s0 + tau - r.tTr, doses, eff) }
+      };
+      doses.forEach(d => { if (d.s <= out.span) out.doseX.push(d.s); });
+    }
+    return out;
+  }
+
+  function drawChart() {
+    const cv = $('cv'), wrap = $('cwrap');
+    const ok = last && last.ok && last.eff && last.tau;
+    $('legend').hidden = !ok; wrap.hidden = !ok;
+    const msg = $('chartMsg');
+    if (!ok) {
+      msg.hidden = false; $('chartCap').textContent = '';
+      msg.textContent = !last || !last.ok ? '先完成左側必填資料，曲線會自動繪出。'
+        : last.renal === 'hd' ? '血液透析病人不使用濃度–時間預測；請以透析前濃度（目標 15–20 mg/L）判讀。'
+        : 'CRRT 無可靠的族群預測模型；輸入左側 ③ 的 Peak／Trough 實測值後，會依實測值繪製曲線。';
+      return;
+    }
+    msg.hidden = true;
+    const view = radio('view'), r = last;
+    const S = buildSeries(r, view);
+    const W = wrap.clientWidth; if (!W) return;
+    const fsr = parseFloat(getComputedStyle(document.documentElement).fontSize) / 16;
+    const H = Math.round(Math.min(420, Math.max(290, W * 0.44)));
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + 'px';
+    const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const padL = 50 * fsr, padR = 14, padT = 16, padB = 42 * fsr;
+    const cw = W - padL - padR, ch = H - padT - padB;
+    const bandLo = 400 * r.mic / 24, bandHi = 600 * r.mic / 24;
+    const maxC = Math.max.apply(null, S.pts.map(p => p.y));
+    let ymax = Math.max(maxC * 1.18, bandHi * 1.12, r.cP > 0 ? r.cP * 1.15 : 0, 20);
+    const ystep = ymax <= 40 ? 5 : ymax <= 80 ? 10 : 20; ymax = Math.ceil(ymax / ystep) * ystep;
+    const tx = x => padL + x / S.span * cw, ty = y => padT + ch - y / ymax * ch;
+    const font = (px, w) => (w || 500) + ' ' + (px * fsr) + 'px "Noto Sans TC","Microsoft JhengHei",sans-serif';
+
+    ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = 'rgba(10,107,69,.11)'; ctx.fillRect(padL, ty(bandHi), cw, ty(bandLo) - ty(bandHi));
+    ctx.strokeStyle = 'rgba(10,107,69,.6)'; ctx.lineWidth = 1; ctx.setLineDash([5, 4]);
+    [bandLo, bandHi].forEach(v => { ctx.beginPath(); ctx.moveTo(padL, ty(v)); ctx.lineTo(padL + cw, ty(v)); ctx.stroke(); });
+    ctx.setLineDash([]);
+
+    ctx.strokeStyle = '#e1e8f0'; ctx.lineWidth = 1; ctx.fillStyle = '#51647c'; ctx.font = font(12);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let y = 0; y <= ymax + 1e-9; y += ystep) {
+      ctx.beginPath(); ctx.moveTo(padL, ty(y)); ctx.lineTo(padL + cw, ty(y)); ctx.stroke();
+      ctx.fillText(String(y), padL - 8, ty(y));
+    }
+    const xs = S.span <= 48 ? 6 : S.span <= 100 ? 12 : S.span <= 150 ? 24 : 48;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (let x = 0; x <= S.span + 1e-9; x += xs) {
+      ctx.strokeStyle = '#eef2f7'; ctx.beginPath(); ctx.moveTo(tx(x), padT); ctx.lineTo(tx(x), padT + ch); ctx.stroke();
+      ctx.fillStyle = '#51647c'; ctx.fillText(x + 'h', tx(x), padT + ch + 6);
+    }
+    ctx.fillStyle = '#13233a'; ctx.font = font(12.5, 700);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('時間（小時）' + (view === 'ss' ? '　0 h = 穩態下某次給藥開始' : '　0 h = 首劑 LD 開始'), padL + cw / 2, padT + ch + 22 * fsr);
+    ctx.save(); ctx.translate(13, padT + ch / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = 'middle'; ctx.fillText('濃度 (mg/L)', 0, 0); ctx.restore();
+
+    ctx.strokeStyle = 'rgba(80,95,115,.7)'; ctx.setLineDash([2, 4]); ctx.beginPath(); ctx.moveTo(padL, ty(10)); ctx.lineTo(padL + cw, ty(10)); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#51647c'; ctx.font = font(11); ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillText('Trough 10', padL + cw - 4, ty(10) - 2);
+    const bandTxt = 'AUC 400–600 ↔ 平均濃度 ' + f1(bandLo) + '–' + f1(bandHi);
+    ctx.font = font(11); ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(padL + 4, ty(bandHi) - 17 * fsr, ctx.measureText(bandTxt).width + 8, 16 * fsr);
+    ctx.fillStyle = 'rgba(10,107,69,1)'; ctx.fillText(bandTxt, padL + 8, ty(bandHi) - 2);
+
+    if (view === 'ss' && S.shade) {
+      ctx.beginPath(); ctx.moveTo(tx(S.shade.x0), ty(0));
+      S.pts.forEach(p => { if (p.x >= S.shade.x0 - 1e-9) ctx.lineTo(tx(p.x), ty(p.y)); });
+      ctx.lineTo(tx(S.shade.x1), ty(0)); ctx.closePath(); ctx.fillStyle = 'rgba(11,92,171,.17)'; ctx.fill();
+      const cx = tx((S.shade.x0 + S.shade.x1) / 2);
+      ctx.fillStyle = '#084783'; ctx.font = font(13, 800); ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      const t = S.shade.win === 24 ? 'AUC₂₄ ≈ ' + f0(r.auc24) : 'AUC(' + S.shade.win + 'h) ≈ ' + f0(r.auc24 * S.shade.win / 24) + '　→ AUC₂₄ ≈ ' + f0(r.auc24);
+      ctx.fillText(t, cx, ty(0) - 6);
+    }
+
+    S.doseX.forEach(x => {
+      ctx.strokeStyle = 'rgba(11,92,171,.35)'; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(tx(x), padT); ctx.lineTo(tx(x), padT + ch); ctx.stroke(); ctx.setLineDash([]);
+    });
+
+    ctx.beginPath(); ctx.strokeStyle = '#0b5cab'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
+    S.pts.forEach((p, i) => i ? ctx.lineTo(tx(p.x), ty(p.y)) : ctx.moveTo(tx(p.x), ty(p.y))); ctx.stroke();
+
+    const pill = (text, x, y, color, align) => {
+      ctx.font = font(12, 700); const w = ctx.measureText(text).width + 12, h = 20 * fsr;
+      let x0 = align === 'left' ? x : align === 'right' ? x - w : x - w / 2; x0 = Math.max(padL, Math.min(x0, padL + cw - w));
+      const y0 = Math.max(padT, Math.min(y - h / 2, padT + ch - h));
+      ctx.fillStyle = '#fff'; ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+      ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x0, y0, w, h, 5); else ctx.rect(x0, y0, w, h); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = color; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(text, x0 + 6, y0 + h / 2 + 1);
+    };
+    const M = S.markers;
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(198,40,40,.45)'; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(tx(M.peak.x), padT); ctx.lineTo(tx(M.peak.x), padT + ch); ctx.stroke();
+    ctx.strokeStyle = 'rgba(180,95,0,.5)'; ctx.beginPath(); ctx.moveTo(tx(M.trough.x), padT); ctx.lineTo(tx(M.trough.x), padT + ch); ctx.stroke(); ctx.setLineDash([]);
+    const px = tx(M.peak.x), py = ty(M.peak.y), q = 7 * fsr;
+    ctx.fillStyle = '#c62828'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(px, py - q); ctx.lineTo(px + q, py); ctx.lineTo(px, py + q); ctx.lineTo(px - q, py); ctx.closePath(); ctx.fill(); ctx.stroke();
+    const qx = tx(M.trough.x), qy = ty(M.trough.y), s = 6 * fsr;
+    ctx.fillStyle = '#b45f00'; ctx.fillRect(qx - s, qy - s, 2 * s, 2 * s); ctx.strokeRect(qx - s, qy - s, 2 * s, 2 * s);
+    pill('Peak ≈ ' + f1(M.peak.y), px, py - 20 * fsr, '#c62828', 'center');
+    pill('Trough ≈ ' + f1(M.trough.y), qx, qy - 20 * fsr, '#b45f00', 'right');
+    S.tdm.forEach(t => {
+      const x = tx(t.x), y = ty(t.y);
+      ctx.beginPath(); ctx.fillStyle = '#13233a'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.arc(x, y, 6 * fsr, 0, 7); ctx.fill(); ctx.stroke();
+      pill(t.l, x, y + 20 * fsr, '#13233a', 'center');
+    });
+
+    if (hoverX != null && hoverX >= padL && hoverX <= padL + cw) {
+      const t = (hoverX - padL) / cw * S.span;
+      let best = S.pts[0]; S.pts.forEach(p => { if (Math.abs(p.x - t) < Math.abs(best.x - t)) best = p; });
+      ctx.strokeStyle = 'rgba(19,35,58,.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(tx(best.x), padT); ctx.lineTo(tx(best.x), padT + ch); ctx.stroke();
+      ctx.beginPath(); ctx.fillStyle = '#0b5cab'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.arc(tx(best.x), ty(best.y), 5, 0, 7); ctx.fill(); ctx.stroke();
+      pill(f1(best.x) + ' h：' + f1(best.y) + ' mg/L', tx(best.x) + 10, ty(best.y) - 26 * fsr, '#13233a', 'left');
+    }
+
+    cv.setAttribute('aria-label', 'Vancomycin 預測濃度時間曲線；預測 Peak 約 ' + f1(M.peak.y) + '，Trough 約 ' + f1(M.trough.y) + ' mg/L；AUC24 約 ' + f0(r.auc24));
+    $('chartCap').textContent = view === 'ss'
+      ? '穩態預測（' + (r.meas ? '依實測值' : '族群公式') + '）。藍色陰影＝AUC；綠帶＝AUC₂₄/MIC 400–600 所對應的平均濃度（AUC÷24）——曲線的平均高度落在綠帶內即達標。游標移到曲線上可看數值。'
+      : '療程起始：LD 後，於「下一個給藥間隔」開始 MD（ASHP 2020）。此為前幾劑累積過程，尚未達穩態，AUC 請看「穩態」檢視。';
+  }
+
+  /* ================= schedule ================= */
+  const WD = ['日', '一', '二', '三', '四', '五', '六'];
+  const hm = d => String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  const md = d => (d.getMonth() + 1) + '/' + d.getDate() + '（' + WD[d.getDay()] + '）';
+  function renderSchedule(r) {
+    const el = $('schedBody'); sched = null;
+    if (!r.ok) { el.innerHTML = '<div class="msg">先完成左側必填資料，這裡會自動換算抽血時間。</div>'; return; }
+    if (!r.tau) { el.innerHTML = '<div class="msg">血液透析病人：請在<b>透析前</b>抽 1 點血（目標 15–20 mg/L），不需換算 Peak／Trough。</div>'; return; }
+    const v = $('doseDT').value; if (!v) { el.innerHTML = '<div class="msg">請輸入給藥時間。</div>'; return; }
+    const t0 = new Date(v); if (isNaN(t0)) return;
+    const H = 3600000, at = h => new Date(t0.getTime() + h * H);
+    const tEnd = at(r.tin), tPeak = at(r.tin + r.tP), tTrough = at(r.tau - r.tTr), tNext = at(r.tau);
+    const day0 = t0.toDateString();
+    const dayTag = d => d.toDateString() === day0 ? '' : '<span class="tag">跨日</span>';
+    const row = (cls, d, title, sub) => '<li class="' + cls + '"><div class="t">' + hm(d) + '<small>' + md(d) + '</small></div><div class="w"><b>' + title + '</b>' + dayTag(d) + '<span class="d">' + sub + '</span></div></li>';
+    sched = { start: t0, peak: tPeak, trough: tTrough, next: tNext, end: tEnd };
+    el.innerHTML = '<ol class="tl">' +
+      row('dim', t0, '開始輸注', '輸注 ' + r.tin + ' hr，劑量 ' + f0(r.dose) + ' mg') +
+      row('dim', tEnd, '輸注結束', '尚在分佈期，請勿抽血') +
+      row('peak', tPeak, '抽 Peak', '輸注結束後 ' + r.tP + ' hr（距開始輸注 ' + (r.tin + r.tP) + ' hr）') +
+      row('trough', tTrough, '抽 Trough', '下次給藥前 ' + r.tTr + ' hr（距開始輸注 ' + (r.tau - r.tTr) + ' hr）') +
+      row('dim', tNext, '下次給藥', TAUL[r.tau] + '，間隔 ' + r.tau + ' hr') + '</ol>' +
+      '<div class="xl"><b>對照 Excel 計算表：</b>Time before dose = <b>' + r.tTr + ' hr</b>（比應給藥時間早抽為正值、延後為負值）；Time after dose = <b>' + (r.tin + r.tP) + ' hr</b>（從輸注「開始」算起）。</div>';
+  }
+
+  /* ================= nomogram & pk detail ================= */
+  function renderNomo(r) {
+    let h = '<table class="nomo"><thead><tr><th>CLcr (mL/min)</th>' + COLS.map(c => '<th>' + c + '</th>').join('') + '</tr></thead><tbody>';
+    NOMO.forEach((row, i) => {
+      const rowHit = r.ok && r.renal === 'normal' && r.rec.row === i;
+      h += '<tr class="' + (rowHit ? 'hl' : '') + '"><td class="rowh">' + row.label + '</td>' + row.cells.map((c, j) =>
+        '<td class="' + (rowHit && r.rec.col === j ? 'hit' : '') + '">' + c[0] + ' mg ' + TAUL[c[1]] + '</td>').join('') + '</tr>';
+    });
+    $('nomoBody').innerHTML = h + '</tbody></table>';
+  }
+  function renderPK(r) {
+    if (!r.ok || !r.eff) { $('pkBody').innerHTML = '<div><span>尚無資料</span><span>—</span></div>'; return; }
+    const e = r.eff, p = r.preds;
+    const kv = (k, v) => '<div><span>' + k + '</span><span>' + v + '</span></div>';
+    $('pkBody').innerHTML =
+      kv('資料來源', r.meas ? '實測兩點法' : '族群公式 CL = 0.79×CLcr + 15.7') +
+      kv('Ke', e.ke.toFixed(4) + ' hr⁻¹') + kv('t½', f1(Math.LN2 / e.ke) + ' hr') +
+      kv('Vd', f1(e.vd) + ' L') + kv('CL', f1(e.cl) + ' L/hr') +
+      kv('穩態 Peak（預測）', f1(p.peak) + ' mg/L') + kv('穩態 Trough（預測）', f1(p.trough) + ' mg/L') +
+      kv('AUC₂₄', f0(r.auc24) + ' mg·hr/L') + kv('AUC₂₄/MIC', f0(r.aucMIC)) +
+      (r.meas ? kv('Ceoi（外推）', f1(r.meas.ceoi) + ' mg/L') + kv('真正 Trough（外推）', f1(r.meas.ct) + ' mg/L') : '');
+  }
+
+  /* ================= copy summary ================= */
+  function summaryText() {
+    const r = last; if (!r || !r.ok) return '';
+    const L = [];
+    const lab = $('ptLabel').value.trim();
+    L.push('【Vancomycin TDM 試算】' + (lab ? ' 病人：' + lab : '') + '　' + new Date().toLocaleString('zh-TW', { hour12: false }));
+    L.push(r.age + ' 歲 ' + (r.sex === 'male' ? '男' : '女') + '，' + r.tbw + ' kg，' + r.height + ' cm，SCr ' + r.scr + ' mg/dL，CLcr ' + (r.renal === 'hd' ? '透析' : f0(r.clcr) + ' mL/min') + (r.renal === 'crrt' ? '（CRRT）' : ''));
+    L.push('LD：' + f0(r.ld) + ' mg，' + r.ldBasis);
+    L.push('MD：' + f0(r.dose) + ' mg ' + (r.tau ? TAUL[r.tau] : '透析後') + (r.tau ? '，輸注 ' + r.tin + ' hr' : '') + (r.custom ? '（目前醫囑；藥典建議 ' + r.rec.dose + ' mg ' + r.rec.label + '）' : ''));
+    if (r.aucMIC != null) L.push('AUC₂₄/MIC：' + f0(r.aucMIC) + '（目標 400–600；' + (r.meas ? '依實測' : '族群預測') + '）');
+    if (r.preds) L.push('預測 Peak ' + f1(r.preds.peak) + ' / Trough ' + f1(r.preds.trough) + ' mg/L');
+    if (sched) L.push('抽血：Peak ' + md(sched.peak) + ' ' + hm(sched.peak) + '；Trough ' + md(sched.trough) + ' ' + hm(sched.trough) + '（開始輸注 ' + md(sched.start) + ' ' + hm(sched.start) + '）');
+    return L.join('\n');
+  }
+  function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 1800); }
+  function copyText(text) {
+    const fb = () => { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (e) {} document.body.removeChild(ta); return ok; };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => toast('已複製，可貼到藥歷／交班'), () => toast(fb() ? '已複製，可貼到藥歷／交班' : '複製失敗，請手動選取'));
+    else toast(fb() ? '已複製，可貼到藥歷／交班' : '複製失敗，請手動選取');
+  }
+
+  /* ================= update loop ================= */
+  function update() {
+    updateFieldState();
+    $('customBox').hidden = radio('mode') !== 'custom';
+    $('renalNote').classList.toggle('on', radio('renal') === 'crrt');
+    last = compute();
+    renderHero(last); renderAlerts(last); drawChart(); renderSchedule(last); renderNomo(last); renderPK(last);
+  }
+
+  /* ================= wiring ================= */
+  ['age', 'tbw', 'height', 'scr', 'cDose', 'cPeak', 'cTrough', 'tPeak', 'tTrough'].forEach(id => $(id).addEventListener('input', update));
+  ['cTau', 'tinPref', 'mic', 'critical', 'doseDT'].forEach(id => { $(id).addEventListener('input', update); $(id).addEventListener('change', update); });
+  document.querySelectorAll('input[type=radio]').forEach(el => el.addEventListener('change', update));
+  $('btnCopy').addEventListener('click', () => copyText(summaryText()));
+  $('btnNow').addEventListener('click', () => { setNow(); update(); });
+  $('btnExample').addEventListener('click', () => {
+    $('age').value = 65; $('tbw').value = 60; $('height').value = 165; $('scr').value = '1.0';
+    $('sex-m').checked = true; $('renal-n').checked = true; $('mode-r').checked = true; $('critical').checked = false;
+    update();
+  });
+  $('btnReset').addEventListener('click', () => {
+    ['age', 'tbw', 'height', 'scr', 'cDose', 'cPeak', 'cTrough', 'ptLabel'].forEach(id => $(id).value = '');
+    $('tPeak').value = '1.5'; $('tTrough').value = '0.5'; $('cTau').value = '12'; $('tinPref').value = 'auto'; $('mic').value = '1'; $('critical').checked = false;
+    $('sex-m').checked = true; $('renal-n').checked = true; $('mode-r').checked = true; $('view-ss').checked = true;
+    $('tdmBox').open = false; setNow(); update(); window.scrollTo({ top: 0, behavior: 'smooth' });
+    $('age').focus();
+  });
+  const order = ['age', 'tbw', 'height', 'scr'];
+  order.forEach((id, i) => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); const n = order[i + 1]; if (n) $(n).focus(); else $(id).blur(); } }));
+  document.querySelectorAll('.fsz button').forEach(b => b.addEventListener('click', () => {
+    document.documentElement.style.fontSize = b.dataset.fs + 'px';
+    document.querySelectorAll('.fsz button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+    drawChart();
+  }));
+  const cv = $('cv');
+  cv.addEventListener('pointermove', e => { const rc = cv.getBoundingClientRect(); hoverX = e.clientX - rc.left; drawChart(); });
+  cv.addEventListener('pointerleave', () => { hoverX = null; drawChart(); });
+  if (window.ResizeObserver) new ResizeObserver(() => drawChart()).observe($('cwrap')); else window.addEventListener('resize', drawChart);
+
+  function setNow() {
+    const n = new Date(), p = x => String(x).padStart(2, '0');
+    $('doseDT').value = n.getFullYear() + '-' + p(n.getMonth() + 1) + '-' + p(n.getDate()) + 'T' + p(n.getHours()) + ':' + p(n.getMinutes());
+  }
+  function tick() { $('clock').textContent = new Date().toLocaleTimeString('zh-TW', { hour12: false }); }
+  setInterval(tick, 1000); tick();
+  setNow(); update();
+
+  window.__tdm = { get last() { return last; }, get sched() { return sched; }, summaryText: summaryText, buildSeries: buildSeries };
+})();
+</script>
+</body>
+</html>
