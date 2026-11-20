@@ -213,6 +213,16 @@
   .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
   @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
   .beta-banner{background:#fff4d6;color:#7a4b00;border-bottom:2px solid #f0b429;padding:8px 16px;font-size:.9rem;font-weight:600;text-align:center;line-height:1.5}
+
+  .guide { padding:.8rem 1rem; }
+  .guide-row { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; }
+  .guide-row h2 { margin:0 .4rem 0 0; font-size:1.05rem; }
+  .guide-row .btn { min-height:2.6rem; padding:.3rem .9rem; }
+  .guide-row select { min-height:2.6rem; border:2px solid var(--line); border-radius:.6rem; padding:0 .5rem; background:#fff; font:inherit; }
+  .guide-text { margin-top:.6rem; font-size:.95rem; line-height:1.75; }
+  .guide-text p { margin:.2rem 0; padding:.1rem .4rem; border-radius:.4rem; }
+  .guide-text p.now { background:#fff4d6; box-shadow:inset 3px 0 0 #f0b429; }
+  .guide-note { font-size:.8rem; color:var(--muted); margin-top:.4rem; }
 </style>
 </head>
 <body>
@@ -302,7 +312,7 @@
           </div>
           <div class="field">
             <label for="cTau">給藥間隔</label>
-            <div class="inp"><select id="cTau"><option value="8">Q8H</option><option value="12" selected>Q12H</option><option value="24">Q24H</option><option value="48">Q48H</option></select></div>
+            <div class="inp"><select id="cTau"><option value="8">Q8H（每 8 小時）</option><option value="12" selected>Q12H（每 12 小時）</option><option value="24">Q24H＝QD（每天一次）</option><option value="48">Q48H＝QOD（隔天一次）</option></select></div>
           </div>
         </div>
       </div>
@@ -340,14 +350,14 @@
         </div>
         <div class="field">
           <label for="tPeak">Peak：輸注結束後</label>
-          <div class="inp"><input id="tPeak" inputmode="decimal" value="1.5"><span class="unit">hr</span></div>
+          <div class="inp"><input id="tPeak" inputmode="decimal" value="2"><span class="unit">hr</span></div>
         </div>
         <div class="field">
           <label for="tTrough">Trough：下次給藥前</label>
           <div class="inp"><input id="tTrough" inputmode="decimal" value="0.5"><span class="unit">hr</span></div>
         </div>
       </div>
-      <p class="sub">需分佈完成後（輸注結束後 1–2 hr）才抽 Peak。輸入兩點後，AUC 改用實測值（兩點法）計算。</p>
+      <p class="sub">需分佈完成後（輸注結束後至少 2 hr，預設 2 hr）才抽 Peak。輸入兩點後，AUC 改用實測值（兩點法）計算。</p>
     </details>
 
     <div class="actions">
@@ -358,6 +368,21 @@
 
   <!-- ================= RIGHT: RESULT ================= -->
   <main class="panel-right" aria-label="結果區">
+
+    <section class="card guide" id="guide" aria-label="使用說明語音">
+      <div class="guide-row">
+        <h2>🔊 使用說明（約 1.5 分鐘）</h2>
+        <button type="button" class="btn" id="gPlay">▶ 播放說明</button>
+        <button type="button" class="btn ghost" id="gStop" hidden>■ 停止</button>
+        <label for="gRate" class="sub" style="margin:0">語速</label>
+        <select id="gRate"><option value="0.85">慢</option><option value="1" selected>正常</option><option value="1.2">快</option></select>
+      </div>
+      <details class="adv" id="gTextBox" style="margin-top:.4rem">
+        <summary>顯示文字版說明</summary>
+        <div class="guide-text" id="gText"></div>
+      </details>
+      <p class="guide-note" id="gNote"></p>
+    </section>
 
     <section class="card" id="hero" aria-live="polite">
       <div class="empty" id="heroEmpty">
@@ -429,13 +454,20 @@
     </section>
 
     <section class="card" id="schedCard">
-      <h2>抽血排程 <small>輸入給藥時間，自動換算幾點抽 Peak／Trough</small></h2>
+      <h2>抽血排程 <small>輸入「第一劑」給藥時間，自動排出穩態後的 Trough／Peak</small></h2>
       <div class="sched-in">
         <div class="field">
-          <label for="doseDT">要抽血的那一劑：開始輸注的日期時間</label>
+          <label for="doseDT">第一劑開始輸注的日期時間</label>
           <div class="inp"><input type="datetime-local" id="doseDT"></div>
         </div>
         <button type="button" class="btn" id="btnNow" style="min-width:6rem">現在</button>
+      </div>
+      <div class="field" style="margin:0 0 .8rem">
+        <span class="lbl" id="ldmodeLbl" style="display:block;font-weight:700;margin-bottom:.3rem">第一劑是</span>
+        <div class="seg" role="radiogroup" aria-labelledby="ldmodeLbl" style="max-width:24rem">
+          <input type="radio" name="ldmode" id="ld-y" value="ld" checked><label for="ld-y">LD（負荷劑量）</label>
+          <input type="radio" name="ldmode" id="ld-n" value="md"><label for="ld-n">直接 MD（無 LD）</label>
+        </div>
       </div>
       <div id="schedBody"><div class="msg">先完成左側必填資料，這裡會自動換算抽血時間。</div></div>
     </section>
@@ -545,7 +577,7 @@
 
     // ---- Measured two-point（Sawchuk-Zaske：梯形＋對數梯形） ----
     const cP = num('cPeak'), cT = num('cTrough');
-    const tP = num('tPeak') == null ? 1.5 : num('tPeak');
+    const tP = num('tPeak') == null ? 2 : num('tPeak');
     const tTr = num('tTrough') == null ? 0.5 : num('tTrough');
     let meas = null, measErr = null;
     if (cP > 0 && cT > 0) {
@@ -868,21 +900,40 @@
     const el = $('schedBody'); sched = null;
     if (!r.ok) { el.innerHTML = '<div class="msg">先完成左側必填資料，這裡會自動換算抽血時間。</div>'; return; }
     if (!r.tau) { el.innerHTML = '<div class="msg">血液透析病人：請在<b>透析前</b>抽 1 點血（目標 15–20 mg/L），不需換算 Peak／Trough。</div>'; return; }
-    const v = $('doseDT').value; if (!v) { el.innerHTML = '<div class="msg">請輸入給藥時間。</div>'; return; }
+    const v = $('doseDT').value; if (!v) { el.innerHTML = '<div class="msg">請輸入第一劑給藥時間。</div>'; return; }
     const t0 = new Date(v); if (isNaN(t0)) return;
+    const hasLD = radio('ldmode') !== 'md';
     const H = 3600000, at = h => new Date(t0.getTime() + h * H);
-    const tEnd = at(r.tin), tPeak = at(r.tin + r.tP), tTrough = at(r.tau - r.tTr), tNext = at(r.tau);
+    // 第 n 劑 MD 的開始輸注時間（有 LD：LD 在 0，MD1 在下一個間隔；無 LD：MD1 即第一劑）
+    const mdOff = n => (hasLD ? n : n - 1) * r.tau;
+    // 穩態：預設第 3 劑 MD 後 → 第 4 劑 MD 抽血；若半衰期長（<3.3 個 t½ 尚未達約 90% 穩態）則往後延
+    const t12 = r.eff ? Math.LN2 / r.eff.ke : null;
+    let n = 4, delayed = false;
+    if (t12) while (n < 12 && mdOff(n) - r.tTr < 3.3 * t12) { n++; delayed = true; }
+    const dStart = at(mdOff(n)), dEnd = new Date(dStart.getTime() + r.tin * H);
+    const tTrough = new Date(dStart.getTime() - r.tTr * H);
+    const tPeak = new Date(dStart.getTime() + (r.tin + r.tP) * H);
+    const now = new Date();
     const day0 = t0.toDateString();
     const dayTag = d => d.toDateString() === day0 ? '' : '<span class="tag">跨日</span>';
-    const row = (cls, d, title, sub) => '<li class="' + cls + '"><div class="t">' + hm(d) + '<small>' + md(d) + '</small></div><div class="w"><b>' + title + '</b>' + dayTag(d) + '<span class="d">' + sub + '</span></div></li>';
-    sched = { start: t0, peak: tPeak, trough: tTrough, next: tNext, end: tEnd };
-    el.innerHTML = '<ol class="tl">' +
-      row('dim', t0, '開始輸注', '輸注 ' + r.tin + ' hr，劑量 ' + f0(r.dose) + ' mg') +
-      row('dim', tEnd, '輸注結束', '尚在分佈期，請勿抽血') +
-      row('peak', tPeak, '抽 Peak', '輸注結束後 ' + r.tP + ' hr（距開始輸注 ' + (r.tin + r.tP) + ' hr）') +
-      row('trough', tTrough, '抽 Trough', '下次給藥前 ' + r.tTr + ' hr（距開始輸注 ' + (r.tau - r.tTr) + ' hr）') +
-      row('dim', tNext, '下次給藥', TAUL[r.tau] + '，間隔 ' + r.tau + ' hr') + '</ol>' +
-      '<div class="xl"><b>對照 Excel 計算表：</b>Time before dose = <b>' + r.tTr + ' hr</b>（比應給藥時間早抽為正值、延後為負值）；Time after dose = <b>' + (r.tin + r.tP) + ' hr</b>（從輸注「開始」算起）。</div>';
+    const pastTag = d => d < now ? '<span class="tag" style="background:#e8e8e8;color:#555">已過</span>' : '';
+    const row = (cls, d, title, sub) => '<li class="' + cls + '"><div class="t">' + hm(d) + '<small>' + md(d) + '</small></div><div class="w"><b>' + title + '</b>' + dayTag(d) + pastTag(d) + '<span class="d">' + sub + '</span></div></li>';
+    sched = { start: dStart, peak: tPeak, trough: tTrough, end: dEnd, first: t0, doseNo: n, hasLD: hasLD };
+    let h = '<div class="xl" style="margin:0 0 .7rem"><b>目前方案：</b>' + f0(r.dose) + ' mg ' + TAUL[r.tau] + (r.custom ? '（自訂醫囑）' : '（電子藥典建議）') + '　<span style="color:var(--muted)">要改成 Q8H／Q12H／QD，請到左側「② 給藥方案」選「自訂（目前醫囑）」。</span></div><ol class="tl">';
+    if (hasLD) h += row('dim', t0, 'LD（負荷劑量）', f0(r.ld) + ' mg，STAT；不算在維持劑量的次數');
+    for (let i = 1; i <= n - 1; i++) {
+      h += row('dim', at(mdOff(i)), '第 ' + i + ' 劑 MD', f0(r.dose) + ' mg ' + TAUL[r.tau] + (i === n - 1 ? '　← 給完後約達穩態' : '　（穩態前，不抽血）'));
+    }
+    h += row('trough', tTrough, '抽 Trough（第 ' + n + ' 劑 MD 給藥前）', '下次給藥前 ' + r.tTr + ' hr；必須在第 ' + n + ' 劑「開始輸注前」抽，抽完才給藥');
+    h += row('dim', dStart, '第 ' + n + ' 劑 MD 開始輸注', f0(r.dose) + ' mg，輸注 ' + r.tin + ' hr，' + hm(dEnd) + ' 結束');
+    h += row('peak', tPeak, '抽 Peak（第 ' + n + ' 劑輸注結束後）', '輸注結束後 ' + r.tP + ' hr，等藥物分佈完成；請從「另一側手臂」抽');
+    h += '</ol>';
+    h += '<div class="xl"><b>為什麼是第 ' + n + ' 劑：</b>' + (delayed
+        ? '此病人半衰期約 ' + f1(t12) + ' hr，要經過約 3.3 個半衰期才達穩態（約 90%），所以延到第 ' + n + ' 劑才抽（預設為第 4 劑）。'
+        : '維持劑量（MD）給到第 3 劑後達穩態，所以在第 4 劑給藥前抽 Trough、輸注完成後抽 Peak（不計 LD）。')
+      + '<br>腎功能穩定時，Peak 與 Trough <b>不必在同一個給藥間隔</b>，但<b>不能在同一個時間點</b>抽。腎功能不穩或有調整劑量時，穩態時間要重新計算，請重新輸入。</div>';
+    h += '<div class="xl"><b>對照 Excel 計算表（以第 ' + n + ' 劑為基準）：</b>Time before dose = <b>' + r.tTr + ' hr</b>（比應給藥時間早抽為正值、延後為負值）；Time after dose = <b>' + f1(r.tin + r.tP) + ' hr</b>（從輸注「開始」算起）。</div>';
+    el.innerHTML = h;
   }
 
   /* ================= nomogram & pk detail ================= */
@@ -919,7 +970,7 @@
     L.push('MD：' + f0(r.dose) + ' mg ' + (r.tau ? TAUL[r.tau] : '透析後') + (r.tau ? '，輸注 ' + r.tin + ' hr' : '') + (r.custom ? '（目前醫囑；藥典建議 ' + r.rec.dose + ' mg ' + r.rec.label + '）' : ''));
     if (r.aucMIC != null) L.push('AUC₂₄/MIC：' + f0(r.aucMIC) + '（目標 400–600；' + (r.meas ? '依實測' : '族群預測') + '）');
     if (r.preds) L.push('預測 Peak ' + f1(r.preds.peak) + ' / Trough ' + f1(r.preds.trough) + ' mg/L');
-    if (sched) L.push('抽血：Peak ' + md(sched.peak) + ' ' + hm(sched.peak) + '；Trough ' + md(sched.trough) + ' ' + hm(sched.trough) + '（開始輸注 ' + md(sched.start) + ' ' + hm(sched.start) + '）');
+    if (sched) L.push('抽血（穩態，第 ' + sched.doseNo + ' 劑 MD）：Trough ' + md(sched.trough) + ' ' + hm(sched.trough) + '（給藥前）；Peak ' + md(sched.peak) + ' ' + hm(sched.peak) + '（輸注結束後）；第一劑 ' + (sched.hasLD ? 'LD ' : 'MD ') + md(sched.first) + ' ' + hm(sched.first));
     return L.join('\n');
   }
   function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 1800); }
@@ -951,8 +1002,8 @@
   });
   $('btnReset').addEventListener('click', () => {
     ['age', 'tbw', 'height', 'scr', 'cDose', 'cPeak', 'cTrough', 'ptLabel'].forEach(id => $(id).value = '');
-    $('tPeak').value = '1.5'; $('tTrough').value = '0.5'; $('cTau').value = '12'; $('tinPref').value = 'auto'; $('mic').value = '1'; $('critical').checked = false;
-    $('sex-m').checked = true; $('renal-n').checked = true; $('mode-r').checked = true; $('view-ss').checked = true;
+    $("tPeak").value = "2"; $('tTrough').value = '0.5'; $('cTau').value = '12'; $('tinPref').value = 'auto'; $('mic').value = '1'; $('critical').checked = false;
+    $('sex-m').checked = true; $('renal-n').checked = true; $('mode-r').checked = true; $('view-ss').checked = true; $('ld-y').checked = true;
     $('tdmBox').open = false; setNow(); update(); window.scrollTo({ top: 0, behavior: 'smooth' });
     $('age').focus();
   });
@@ -972,6 +1023,45 @@
     const n = new Date(), p = x => String(x).padStart(2, '0');
     $('doseDT').value = n.getFullYear() + '-' + p(n.getMonth() + 1) + '-' + p(n.getDate()) + 'T' + p(n.getHours()) + ':' + p(n.getMinutes());
   }
+
+  /* ================= voice guide ================= */
+  const GUIDE = [
+    '歡迎使用 Vancomycin TDM 監測平台。這是測試版，使用方法分三步。',
+    '第一步，在左邊輸入病人資料：年齡、性別、體重、身高和血清肌酸酐，系統會自動算出肌酸酐清除率。血液透析或 CRRT 的病人，請在腎功能狀態選擇對應選項。重症或敗血症請勾選，負荷劑量會改用每公斤 25 毫克。',
+    '第二步，右邊會立刻顯示建議的負荷劑量、維持劑量，以及預估的 AUC。預設是電子藥典的建議劑量。如果醫師開的劑量不一樣，請在給藥方案選「自訂」，填入目前醫囑的劑量，再選給藥間隔，可以是每八小時、每十二小時、每天一次或隔天一次，系統會重新預測 AUC。',
+    '第三步，往下看抽血排程。輸入第一劑開始輸注的日期時間，並選擇第一劑是負荷劑量，還是直接給維持劑量，系統會排出每一劑的時間。維持劑量給到第三劑後達到穩態，請在第四劑給藥前抽 Trough，輸注完成後，依畫面顯示的時間抽 Peak。',
+    '如果已經有抽血結果，請展開「已有抽血結果」，輸入兩點濃度，系統會改用實測值計算 AUC，目標是 400 到 600。',
+    '最後提醒：這個工具只是輔助，不能取代電子藥典和臨床判斷。請勿輸入病人姓名等識別資料，頁面也不會儲存任何內容。謝謝。'
+  ];
+  (function () {
+    const box = $('gText'), note = $('gNote'), play = $('gPlay'), stop = $('gStop');
+    GUIDE.forEach((t, i) => { const p = document.createElement('p'); p.textContent = t; p.id = 'g' + i; box.appendChild(p); });
+    const ss = window.speechSynthesis;
+    if (!ss || typeof SpeechSynthesisUtterance === 'undefined') { play.hidden = true; $('gRate').hidden = true; note.textContent = '此瀏覽器不支援語音播放，請展開文字版閱讀。'; return; }
+    let idx = 0, running = false, token = 0, voice = null;
+    function pickVoice() {
+      const vs = ss.getVoices() || [];
+      voice = vs.find(v => /zh[-_]TW/i.test(v.lang)) || vs.find(v => /zh[-_]HK|zh[-_]Hant/i.test(v.lang)) || vs.find(v => /^zh/i.test(v.lang)) || null;
+      note.textContent = voice ? '' : '提示：此裝置沒有找到中文語音，聲音可能不正常；可展開文字版閱讀，或改用手機／Windows 內建中文語音。';
+    }
+    pickVoice(); if (ss.addEventListener) ss.addEventListener('voiceschanged', pickVoice);
+    function mark(i) { box.querySelectorAll('p').forEach(p => p.classList.toggle('now', p.id === 'g' + i)); }
+    function ui(on) { running = on; play.textContent = on ? '⏸ 暫停' : (idx > 0 && idx < GUIDE.length ? '▶ 繼續播放' : '▶ 播放說明'); stop.hidden = !(on || (idx > 0 && idx < GUIDE.length)); }
+    function speakFrom(i) {
+      const my = ++token; ss.cancel(); idx = i;
+      if (i >= GUIDE.length) { idx = 0; mark(-1); ui(false); return; }
+      const u = new SpeechSynthesisUtterance(GUIDE[i]);
+      u.lang = voice ? voice.lang : 'zh-TW'; if (voice) { try { u.voice = voice; } catch (e) {} } u.rate = Number($('gRate').value) || 1;
+      u.onstart = () => { if (my === token) mark(i); };
+      u.onend = () => { if (my === token && running) speakFrom(i + 1); };
+      u.onerror = () => { if (my === token) { running = false; ui(false); } };
+      running = true; ui(true); mark(i); ss.speak(u);
+    }
+    play.addEventListener('click', () => { if (running) { token++; ss.cancel(); ui(false); } else speakFrom(idx); });
+    stop.addEventListener('click', () => { token++; ss.cancel(); idx = 0; mark(-1); ui(false); });
+    $('gRate').addEventListener('change', () => { if (running) speakFrom(idx); });
+    window.addEventListener('pagehide', () => { token++; ss.cancel(); });
+  })();
   function tick() { $('clock').textContent = new Date().toLocaleTimeString('zh-TW', { hour12: false }); }
   setInterval(tick, 1000); tick();
   setNow(); update();
